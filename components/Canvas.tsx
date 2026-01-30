@@ -8,6 +8,7 @@ import {
   Rectangle2d,
   T,
   resizeBox,
+  useEditor,
   type TLShape,
   type TLResizeInfo,
   type Geometry2d,
@@ -76,19 +77,7 @@ class UIComponentShapeUtil extends ShapeUtil<UIComponentShape> {
   }
 
   component(shape: UIComponentShape) {
-    return (
-      <HTMLContainer
-        style={{
-          width: "fit-content",
-          height: "fit-content",
-          pointerEvents: "all",
-        }}
-      >
-        <div style={{ pointerEvents: "none" }}>
-          {getComponentPreview(shape.props.componentName)}
-        </div>
-      </HTMLContainer>
-    );
+    return <AutoSizeWrapper shape={shape} />;
   }
 
   indicator(shape: UIComponentShape) {
@@ -101,6 +90,51 @@ class UIComponentShapeUtil extends ShapeUtil<UIComponentShape> {
       />
     );
   }
+}
+
+function AutoSizeWrapper({ shape }: { shape: UIComponentShape }) {
+  const editor = useEditor();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (
+        width > 0 &&
+        height > 0 &&
+        (Math.abs(width - shape.props.w) > 1 ||
+          Math.abs(height - shape.props.h) > 1)
+      ) {
+        editor.updateShape({
+          id: shape.id,
+          type: "ui-component",
+          props: { w: width, h: height },
+        });
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [editor, shape.id, shape.props.w, shape.props.h]);
+
+  return (
+    <HTMLContainer
+      style={{
+        width: "fit-content",
+        height: "fit-content",
+        pointerEvents: "all",
+      }}
+    >
+      <div ref={ref} style={{ pointerEvents: "none" }}>
+        {getComponentPreview(shape.props.componentName)}
+      </div>
+    </HTMLContainer>
+  );
 }
 
 const shapeUtils = [UIComponentShapeUtil];
