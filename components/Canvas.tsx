@@ -22,6 +22,7 @@ import { ComponentPicker } from "./ComponentPicker";
 import { getComponentPreview } from "./ComponentPreview";
 import { matchComponent, type MatchResult } from "@/lib/matcher";
 import { componentRegistry, type ComponentEntry } from "@/lib/component-registry";
+import { classifySketch } from "@/lib/sketch-classifier";
 
 // ── Custom shape type ──────────────────────────────────────
 declare module "tldraw" {
@@ -117,34 +118,56 @@ export default function Canvas() {
   const [pickerState, setPickerState] = useState<{
     open: boolean;
     matches: ComponentEntry[];
+    replaceShapeId?: string; // sketch shape to replace when picking
   }>({ open: false, matches: [] });
   const editorRef = useRef<Editor | null>(null);
   const placeCountRef = useRef(0);
+  const modeRef = useRef<Mode>(mode);
+  modeRef.current = mode;
 
   const placeComponent = useCallback(
-    (name: string) => {
+    (name: string, opts?: { replaceShapeId?: string }) => {
       const editor = editorRef.current;
       if (!editor) return;
 
-      const viewportCenter = editor.getViewportScreenCenter();
-      const point = editor.screenToPage(viewportCenter);
+      let x: number;
+      let y: number;
+      let w = 300;
+      let h = 200;
 
-      // Offset each new shape so they don't stack
-      const count = placeCountRef.current++;
-      const col = count % 4;
-      const row = Math.floor(count / 4);
-      const offsetX = (col - 1.5) * 340;
-      const offsetY = (row - 0.5) * 240;
+      // If replacing a sketch shape, use its position and remove it
+      if (opts?.replaceShapeId) {
+        const existing = editor.getShape(opts.replaceShapeId as any);
+        if (existing) {
+          x = existing.x;
+          y = existing.y;
+          const bounds = editor.getShapeGeometry(existing).bounds;
+          w = Math.max(bounds.width, 200);
+          h = Math.max(bounds.height, 150);
+          editor.deleteShape(opts.replaceShapeId as any);
+        } else {
+          const viewportCenter = editor.getViewportScreenCenter();
+          const point = editor.screenToPage(viewportCenter);
+          x = point.x - 150;
+          y = point.y - 100;
+        }
+      } else {
+        const viewportCenter = editor.getViewportScreenCenter();
+        const point = editor.screenToPage(viewportCenter);
+
+        // Offset each new shape so they don't stack
+        const count = placeCountRef.current++;
+        const col = count % 4;
+        const row = Math.floor(count / 4);
+        x = point.x - 150 + (col - 1.5) * 340;
+        y = point.y - 100 + (row - 0.5) * 240;
+      }
 
       editor.createShape({
         type: "ui-component",
-        x: point.x - 150 + offsetX,
-        y: point.y - 100 + offsetY,
-        props: {
-          w: 300,
-          h: 200,
-          componentName: name,
-        },
+        x,
+        y,
+        props: { w, h, componentName: name },
       });
     },
     []
@@ -182,10 +205,12 @@ export default function Canvas() {
 
   const handlePickerSelect = useCallback(
     (entry: ComponentEntry) => {
-      placeComponent(entry.name);
+      placeComponent(entry.name, {
+        replaceShapeId: pickerState.replaceShapeId,
+      });
       setPickerState({ open: false, matches: [] });
     },
-    [placeComponent]
+    [placeComponent, pickerState.replaceShapeId]
   );
 
   return (
@@ -201,6 +226,81 @@ export default function Canvas() {
         shapeUtils={shapeUtils}
         onMount={(editor) => {
           editorRef.current = editor;
+
+          // Listen for completed draw/geo shapes in sketch mode
+          const geoTimers = new Map<string, ReturnType<typeof setTimeout>>();
+          const classifiedShapes = new Set<string>();
+
+          editor.sideEffects.registerAfterChangeHandler("shape", (prev, next) => {
+            if (modeRef.current !== "sketch") return;
+            // Don't re-classify shapes we already handled
+            if (classifiedShapes.has(next.id)) return;
+
+            // Only handle draw shapes that just became complete
+            if (next.type === "draw") {
+              const drawProps = next.props as any;
+              if (!drawProps.isComplete || (prev.props as any).isComplete) return;
+              classifiedShapes.add(next.id);
+
+              const bounds = editor.getShapeGeometry(next).bounds;
+              const result = classifySketch({
+                type: "draw",
+                width: bounds.width,
+                height: bounds.height,
+                isClosed: drawProps.isClosed,
+                pointCount: drawProps.segments?.reduce(
+                  (sum: number, s: any) => sum + (s.path?.split(" ").length ?? 0),
+                  0
+                ),
+              });
+              if (result.matches.length > 0) {
+                setPickerState({
+                  open: true,
+                  matches: result.matches,
+                  replaceShapeId: next.id,
+                });
+              }
+            }
+
+            // Handle geo shapes — debounce to get final dimensions after drag
+            if (next.type === "geo") {
+              const geoProps = next.props as any;
+              if (geoProps.w <= 1 && geoProps.h <= 1) return;
+
+              // Clear previous timer for this shape
+              const existing = geoTimers.get(next.id);
+              if (existing) clearTimeout(existing);
+
+              // Set a new timer — fires 300ms after the last resize
+              geoTimers.set(
+                next.id,
+                setTimeout(() => {
+                  geoTimers.delete(next.id);
+                  if (classifiedShapes.has(next.id)) return;
+                  classifiedShapes.add(next.id);
+
+                  // Re-read the shape to get final dimensions
+                  const shape = editor.getShape(next.id as any);
+                  if (!shape || shape.type !== "geo") return;
+                  const props = shape.props as any;
+
+                  const result = classifySketch({
+                    type: "geo",
+                    geo: props.geo,
+                    width: props.w,
+                    height: props.h,
+                  });
+                  if (result.matches.length > 0) {
+                    setPickerState({
+                      open: true,
+                      matches: result.matches,
+                      replaceShapeId: next.id,
+                    });
+                  }
+                }, 300)
+              );
+            }
+          });
         }}
       />
 
