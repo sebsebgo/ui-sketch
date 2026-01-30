@@ -83,10 +83,6 @@ class UIComponentShapeUtil extends ShapeUtil<UIComponentShape> {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "white",
-          borderRadius: 8,
-          border: "1px solid #e2e1de",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
           overflow: "hidden",
           pointerEvents: "all",
         }}

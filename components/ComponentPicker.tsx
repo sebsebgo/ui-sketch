@@ -67,9 +67,12 @@ export function ComponentPicker({ matches, onSelect, onClose }: Props) {
 
         <div className={css({ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "3" })}>
           {matches.map((entry) => (
-            <button
+            <div
               key={entry.name}
+              role="button"
+              tabIndex={0}
               onClick={() => onSelect(entry)}
+              onKeyDown={(e) => { if (e.key === "Enter") onSelect(entry); }}
               className={css({
                 p: "4",
                 borderRadius: "l2",
@@ -94,7 +97,7 @@ export function ComponentPicker({ matches, onSelect, onClose }: Props) {
               <div className={css({ fontSize: "xs", color: "fg.muted" })}>
                 {entry.category}
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>
