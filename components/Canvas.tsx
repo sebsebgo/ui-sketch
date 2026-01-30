@@ -47,7 +47,7 @@ class UIComponentShapeUtil extends ShapeUtil<UIComponentShape> {
   };
 
   getDefaultProps(): UIComponentShape["props"] {
-    return { w: 300, h: 200, componentName: "Button" };
+    return { w: 100, h: 50, componentName: "Button" };
   }
 
   override canEdit() {
@@ -79,11 +79,8 @@ class UIComponentShapeUtil extends ShapeUtil<UIComponentShape> {
     return (
       <HTMLContainer
         style={{
-          padding: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
+          width: "fit-content",
+          height: "fit-content",
           pointerEvents: "all",
         }}
       >
@@ -128,8 +125,8 @@ export default function Canvas() {
 
       let x: number;
       let y: number;
-      let w = 300;
-      let h = 200;
+      let w = 100;
+      let h = 50;
 
       // If replacing a sketch shape, use its position and remove it
       if (opts?.replaceShapeId) {
@@ -138,8 +135,8 @@ export default function Canvas() {
           x = existing.x;
           y = existing.y;
           const bounds = editor.getShapeGeometry(existing).bounds;
-          w = Math.max(bounds.width, 200);
-          h = Math.max(bounds.height, 150);
+          w = Math.max(bounds.width, 100);
+          h = Math.max(bounds.height, 50);
           editor.deleteShape(opts.replaceShapeId as any);
         } else {
           const viewportCenter = editor.getViewportScreenCenter();
