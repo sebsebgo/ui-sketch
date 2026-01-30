@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Tldraw,
   HTMLContainer,
@@ -119,6 +119,7 @@ export default function Canvas() {
     matches: ComponentEntry[];
   }>({ open: false, matches: [] });
   const editorRef = useRef<Editor | null>(null);
+  const placeCountRef = useRef(0);
 
   const placeComponent = useCallback(
     (name: string) => {
@@ -128,10 +129,17 @@ export default function Canvas() {
       const viewportCenter = editor.getViewportScreenCenter();
       const point = editor.screenToPage(viewportCenter);
 
+      // Offset each new shape so they don't stack
+      const count = placeCountRef.current++;
+      const col = count % 4;
+      const row = Math.floor(count / 4);
+      const offsetX = (col - 1.5) * 340;
+      const offsetY = (row - 0.5) * 240;
+
       editor.createShape({
         type: "ui-component",
-        x: point.x - 150,
-        y: point.y - 100,
+        x: point.x - 150 + offsetX,
+        y: point.y - 100 + offsetY,
         props: {
           w: 300,
           h: 200,
@@ -165,6 +173,12 @@ export default function Canvas() {
     },
     [placeComponent]
   );
+
+  // Expose for testing
+  useEffect(() => {
+    (window as any).__testTranscript = handleTranscript;
+    return () => { delete (window as any).__testTranscript; };
+  }, [handleTranscript]);
 
   const handlePickerSelect = useCallback(
     (entry: ComponentEntry) => {

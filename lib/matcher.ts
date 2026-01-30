@@ -20,7 +20,20 @@ export function matchComponent(query: string): MatchResult {
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return { type: "none", matches: [] };
 
-  // Direct name match
+  // Check if query appears in multiple component names/aliases
+  // e.g. "input" matches "Input", "Number Input", "Pin Input", "Tags Input"
+  const nameContains = componentRegistry.filter(
+    (c) =>
+      c.name.toLowerCase().includes(trimmed) ||
+      c.aliases.some((a) => a.toLowerCase().includes(trimmed))
+  );
+
+  if (nameContains.length > 1) {
+    // Multiple components contain this term — ambiguous
+    return { type: "ambiguous", matches: nameContains.slice(0, 5) };
+  }
+
+  // Direct exact name/alias match
   const exactMatch = componentRegistry.find(
     (c) =>
       c.name.toLowerCase() === trimmed ||
